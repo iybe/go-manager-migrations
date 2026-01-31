@@ -1,0 +1,1 @@
+SELECT count(to_regclass('public.t_migrations'));

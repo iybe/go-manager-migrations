@@ -1,0 +1,2 @@
+select migration_name
+from t_migrations;
