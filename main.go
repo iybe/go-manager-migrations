@@ -420,6 +420,7 @@ func runMigrations(db *sql.DB, migrationsDir *string) (err error) {
 
 			err = executeScriptSql(db, pathFileNameFull)
 			if err != nil {
+				fmt.Printf("Error in run %s\n", fileNameFull)
 				return
 			}
 
@@ -469,6 +470,7 @@ func revertMigration(db *sql.DB, migrationsDir *string) (err error) {
 
 	err = executeScriptSql(db, pathFileLastMigration)
 	if err != nil {
+		fmt.Printf("Error in run %s\n", fileLastMigration)
 		return
 	}
 
@@ -515,6 +517,7 @@ func revertAllMigration(db *sql.DB, migrationsDir *string) (err error) {
 
 		err = executeScriptSql(db, pathFileLastMigration)
 		if err != nil {
+			fmt.Printf("Error in run %s\n", fileLastMigration)
 			return
 		}
 
@@ -526,8 +529,6 @@ func revertAllMigration(db *sql.DB, migrationsDir *string) (err error) {
 		fileLastMigrationNoDotSql := fmt.Sprintf("%s.down", *lastMigration)
 		fmt.Printf("MIGRATION %s EXECUTED\n", fileLastMigrationNoDotSql)
 	}
-
-	return
 }
 
 func runSeeders(db *sql.DB, seedersDir *string) (err error) {
@@ -591,6 +592,7 @@ func runSeeders(db *sql.DB, seedersDir *string) (err error) {
 
 			err = executeScriptSql(db, pathFileNameFull)
 			if err != nil {
+				fmt.Printf("Error in run %s\n", fileNameFull)
 				return
 			}
 
@@ -638,6 +640,11 @@ func main() {
 	name := flag.String("name", "null", "Inform the name of something according to the context")
 	flag.Parse()
 
+	loc, err := time.LoadLocation("America/Sao_Paulo")
+	if err != nil {
+		fmt.Print(err.Error())
+	}
+
 	// indicates if the amounts received matched any business rules
 	flagsOk := false
 
@@ -652,8 +659,8 @@ func main() {
 		}
 
 		// create name of files
-		timeNow := time.Now().Unix()
-		nameBase := fmt.Sprintf("%d_%s", timeNow, *name)
+		timeNow := time.Now().In(loc)
+		nameBase := fmt.Sprintf("%d_%s_%s", timeNow.Unix(), timeNow.Format("02_01_2006_150405"), *name)
 		nameUp := fmt.Sprintf("%s.up.sql", nameBase)
 		nameDown := fmt.Sprintf("%s.down.sql", nameBase)
 
@@ -692,8 +699,8 @@ func main() {
 		}
 
 		// create name of files
-		timeNow := time.Now().Unix()
-		name := fmt.Sprintf("%d_%s.sql", timeNow, *name)
+		timeNow := time.Now().In(loc)
+		name := fmt.Sprintf("%d_%s_%s.sql", timeNow.Unix(), timeNow.Format("02_01_2006_150405"), *name)
 
 		// sleep two miliseconds for ensure that the command does not
 		// recreate a file that already exists
