@@ -1,10 +1,4 @@
 {
-    "user": "reston",
-    "password": "dev123456",
-    "host": "localhost",
-    "port": "25432",
-    "dbname": "reston",
-    "sgbd": "postgres",
     "migrationsDir": "/migrations",
     "seedersDir": "/seeders"
 }

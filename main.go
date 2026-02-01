@@ -8,6 +8,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"io"
 	"io/fs"
 	"io/ioutil"
 	"os"
@@ -17,24 +18,34 @@ import (
 	"strings"
 	"time"
 
+	"github.com/joho/godotenv"
 	_ "github.com/lib/pq"
 )
 
 // Comandos:
-/*
-mm create=migration name=nomemigration
+var comandos = `mm --create=migration --name=nomemigration
 - cria os arquivos:
-- TIMESTAMPUNIX_nomemigration.up.sql
-- TIMESTAMPUNIX_nomemigration.down.sql
+- TIMESTAMPUNIX_DD_MM_YYYY_HHMMSS_nomemigration.up.sql
+- TIMESTAMPUNIX_DD_MM_YYYY_HHMMSS_nomemigration.down.sql
 
-mm migration=run
+mm --migration=run
 - executa os up.sql das migrations nao executadas
 
-mm migration=revert
+mm --migration=revert
 - executa o down.sql referente a ultima migration executada
-*/
 
-type SettingDB struct {
+mm --migration=revertall
+- executa o down.sql referente a todas as migrations ja executadas
+
+mm --create=seeder --name=nomeseeder
+- cria os arquivos:
+- TIMESTAMPUNIX_DD_MM_YYYY_HHMMSS_nomeseeder.sql
+
+mm --seeder=run
+- executa os .sql das seeders nao executadas
+`
+
+type Configs struct {
 	Sgbd          string `json:"sgbd"`
 	Host          string `json:"host"`
 	Port          string `json:"port"`
@@ -83,30 +94,55 @@ func findPathFileConfig() (configPath string, err error) {
 	return
 }
 
-func loadSettingsDB() (sdb *SettingDB, err error) {
-	var configPath string
-	configPath, err = findPathFileConfig()
-	if err != nil {
-		return
-	}
-
+// carrega as configs do arquivo mmconfig.json
+// qualquer problema, so ignora
+func loadConfigsFile(sdb *Configs, configPath string) *Configs {
 	var jsonFile *os.File
-	jsonFile, err = os.Open(configPath)
+	jsonFile, err := os.Open(configPath)
 	if err != nil {
-		return
+		return sdb
 	}
 
 	var inBytes []byte
-	inBytes, err = ioutil.ReadAll(jsonFile)
+	inBytes, err = io.ReadAll(jsonFile)
 	if err != nil {
-		return
+		return sdb
 	}
 
-	sdb = &SettingDB{}
-	err = json.Unmarshal(inBytes, sdb)
+	newSdb := &Configs{}
+	err = json.Unmarshal(inBytes, newSdb)
 	if err != nil {
-		return
+		return sdb
 	}
+
+	return newSdb
+}
+
+func loadConfigEnv(sdb *Configs) *Configs {
+	godotenv.Load()
+
+	sdb.Host = os.Getenv("DB_HOST")
+	sdb.Port = os.Getenv("DB_PORT")
+	sdb.User = os.Getenv("DB_USER")
+	sdb.Dbname = os.Getenv("DB_NAME")
+	sdb.Password = os.Getenv("DB_PASSWORD")
+
+	return sdb
+}
+
+func loadConfigs() (*Configs, error) {
+
+	var configPath string
+	configPath, err := findPathFileConfig()
+	if err != nil {
+		return nil, fmt.Errorf("error in findPathFileConfig, %s", err.Error())
+	}
+
+	sdb := &Configs{}
+	sdb = loadConfigsFile(sdb, configPath)
+	sdb = loadConfigEnv(sdb)
+
+	sdb.Sgbd = "postgres"
 
 	// check
 	if sdb.Dbname == "" {
@@ -123,10 +159,6 @@ func loadSettingsDB() (sdb *SettingDB, err error) {
 	}
 	if sdb.Port == "" {
 		err = fmt.Errorf("error : atribute Port empty/not declared in mmconfig.json")
-		return nil, err
-	}
-	if sdb.Sgbd == "" {
-		err = fmt.Errorf("error : atribute Sgbd empty/not declared in mmconfig.json")
 		return nil, err
 	}
 	if sdb.User == "" {
@@ -151,10 +183,10 @@ func loadSettingsDB() (sdb *SettingDB, err error) {
 	sdb.MigrationsDir = pathFolderBased + sdb.MigrationsDir
 	sdb.SeedersDir = pathFolderBased + sdb.SeedersDir
 
-	return
+	return sdb, nil
 }
 
-func connectDatabase(sdb SettingDB) (db *sql.DB, err error) {
+func connectDatabase(sdb Configs) (db *sql.DB, err error) {
 	stringConnection := fmt.Sprintf("host=%s port=%s user=%s dbname=%s password=%s sslmode=disable", sdb.Host, sdb.Port, sdb.User, sdb.Dbname, sdb.Password)
 
 	db, err = sql.Open(sdb.Sgbd, stringConnection)
@@ -618,8 +650,8 @@ func main() {
 	var err error
 
 	// pull database settings
-	var sdb *SettingDB
-	sdb, err = loadSettingsDB()
+	var sdb *Configs
+	sdb, err = loadConfigs()
 	if err != nil {
 		fmt.Println(err)
 		return
@@ -774,5 +806,7 @@ func main() {
 
 	if !flagsOk {
 		fmt.Println("Incorrect Flags")
+		fmt.Println("Commands:")
+		fmt.Println(comandos)
 	}
 }
